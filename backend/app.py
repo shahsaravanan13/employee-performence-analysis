@@ -4,6 +4,7 @@ from flask_cors import CORS
 from sqlalchemy import create_engine, Column, Integer, String, Float, Date
 from sqlalchemy.orm import sessionmaker, declarative_base
 import pandas as pd
+import numpy as np
 
 Base = declarative_base()
 
@@ -27,6 +28,7 @@ def create_app():
     engine = create_engine(f'sqlite:///{db_path}', future=True)
     SessionLocal = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)
+    state = {'df': None}
 
     def ensure_columns():
         with engine.begin() as conn:
@@ -51,6 +53,19 @@ def create_app():
 
     @app.route('/api/meta', methods=['GET'])
     def meta():
+        if state['df'] is not None and not state['df'].empty:
+            df = state['df']
+            num_cols = list(df.select_dtypes(include=[np.number]).columns)
+            cat_cols = []
+            for c in df.columns:
+                if c in num_cols:
+                    continue
+                vc = df[c].dropna().astype(str)
+                if len(vc) == 0:
+                    continue
+                if vc.nunique() <= max(3, min(30, len(vc) // 2)):
+                    cat_cols.append(c)
+            return jsonify({'numeric_columns': num_cols, 'group_columns': cat_cols})
         numeric_columns = ['performance_score', 'projects_completed', 'sales', 'customer_satisfaction']
         group_columns = ['department', 'role', 'location']
         return jsonify({'numeric_columns': numeric_columns, 'group_columns': group_columns})
@@ -94,6 +109,7 @@ def create_app():
         except Exception as e:
             return jsonify({'error': f'csv read failed: {str(e)}'}), 400
         df.columns = [c.strip() for c in df.columns]
+        state['df'] = df
         def safe_str(v):
             if v is None:
                 return None
@@ -142,49 +158,69 @@ def create_app():
         s.commit()
         count = s.query(Employee).count()
         s.close()
-        return jsonify({'status': 'ok', 'total_records': count})
+        return jsonify({'status': 'ok', 'total_records': count, 'uploaded_rows': len(state['df'])})
 
     @app.route('/api/boxplot', methods=['GET'])
     def boxplot():
         metric = request.args.get('metric', 'performance_score')
         group_by = request.args.get('group_by', 'department')
-        s = SessionLocal()
-        q = s.query(Employee).all()
-        data = pd.DataFrame([{
-            'department': e.department,
-            'role': e.role,
-            'location': e.location,
-            'performance_score': e.performance_score,
-            'projects_completed': e.projects_completed,
-            'sales': e.sales,
-            'customer_satisfaction': e.customer_satisfaction
-        } for e in q])
-        s.close()
-        if metric not in data.columns or group_by not in data.columns:
-            return jsonify({'error': 'invalid metric or group_by'}), 400
-        data = data.dropna(subset=[metric, group_by])
+        if state['df'] is not None and not state['df'].empty:
+            data = state['df'].copy()
+            if metric not in data.columns or group_by not in data.columns:
+                return jsonify({'error': 'invalid metric or group_by'}), 400
+            data = data.dropna(subset=[metric, group_by])
+            try:
+                data[metric] = pd.to_numeric(data[metric], errors='coerce')
+            except Exception:
+                return jsonify({'error': 'metric not numeric'}), 400
+        else:
+            s = SessionLocal()
+            q = s.query(Employee).all()
+            data = pd.DataFrame([{
+                'department': e.department,
+                'role': e.role,
+                'location': e.location,
+                'performance_score': e.performance_score,
+                'projects_completed': e.projects_completed,
+                'sales': e.sales,
+                'customer_satisfaction': e.customer_satisfaction
+            } for e in q])
+            s.close()
+            if metric not in data.columns or group_by not in data.columns:
+                return jsonify({'error': 'invalid metric or group_by'}), 400
+            data = data.dropna(subset=[metric, group_by])
         groups = []
         values = []
         for g, d in data.groupby(group_by):
             groups.append(str(g))
-            values.append(list(d[metric].astype(float)))
+            try:
+                values.append(list(pd.to_numeric(d[metric], errors='coerce').dropna().astype(float)))
+            except Exception:
+                values.append([])
         return jsonify({'groups': groups, 'values': values, 'metric': metric, 'group_by': group_by})
 
     @app.route('/api/correlation', methods=['GET'])
     def correlation():
-        s = SessionLocal()
-        q = s.query(Employee).all()
-        data = pd.DataFrame([{
-            'performance_score': e.performance_score,
-            'projects_completed': e.projects_completed,
-            'sales': e.sales,
-            'customer_satisfaction': e.customer_satisfaction
-        } for e in q])
-        s.close()
-        data = data.dropna(how='all')
-        if data.empty:
-            return jsonify({'labels': [], 'matrix': []})
-        corr = data.corr(numeric_only=True)
+        if state['df'] is not None and not state['df'].empty:
+            df = state['df']
+            num_df = df.select_dtypes(include=[np.number])
+            if num_df.empty:
+                return jsonify({'labels': [], 'matrix': []})
+            corr = num_df.corr(numeric_only=True)
+        else:
+            s = SessionLocal()
+            q = s.query(Employee).all()
+            data = pd.DataFrame([{
+                'performance_score': e.performance_score,
+                'projects_completed': e.projects_completed,
+                'sales': e.sales,
+                'customer_satisfaction': e.customer_satisfaction
+            } for e in q])
+            s.close()
+            data = data.dropna(how='all')
+            if data.empty:
+                return jsonify({'labels': [], 'matrix': []})
+            corr = data.corr(numeric_only=True)
         labels = list(corr.columns)
         matrix = corr.values.tolist()
         return jsonify({'labels': labels, 'matrix': matrix})
@@ -196,6 +232,7 @@ def create_app():
         s.commit()
         count = s.query(Employee).count()
         s.close()
+        state['df'] = None
         return jsonify({'status': 'ok', 'total_records': count})
 
     return app

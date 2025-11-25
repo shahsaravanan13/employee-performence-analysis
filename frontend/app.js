@@ -41,6 +41,7 @@ uploadBtn.addEventListener('click', async () => {
     try { data = await res.json() } catch {}
     if (res.ok) {
       uploadStatus.textContent = `Uploaded. Total records: ${data?.total_records ?? 'n/a'}`
+      await loadMeta()
     } else {
       uploadStatus.textContent = `Error: ${data?.error || res.statusText || 'upload failed'}`
     }
@@ -59,6 +60,7 @@ clearBtn.addEventListener('click', async () => {
     const data = await res.json()
     if (res.ok) {
       uploadStatus.textContent = `Cleared. Total records: ${data.total_records}`
+      await loadMeta()
     } else {
       uploadStatus.textContent = `Error: ${data.error || 'reset failed'}`
     }
