@@ -5,6 +5,7 @@ const metricSelect = document.getElementById('metricSelect')
 const groupSelect = document.getElementById('groupSelect')
 const boxplotBtn = document.getElementById('boxplotBtn')
 const corrBtn = document.getElementById('corrBtn')
+const clearBtn = document.getElementById('clearBtn')
 
 async function loadMeta() {
   const res = await fetch('/api/meta')
@@ -50,6 +51,24 @@ uploadBtn.addEventListener('click', async () => {
   }
 })
 
+clearBtn.addEventListener('click', async () => {
+  clearBtn.disabled = true
+  uploadStatus.textContent = 'Clearing data...'
+  try {
+    const res = await fetch('/api/reset', { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) {
+      uploadStatus.textContent = `Cleared. Total records: ${data.total_records}`
+    } else {
+      uploadStatus.textContent = `Error: ${data.error || 'reset failed'}`
+    }
+  } catch (err) {
+    uploadStatus.textContent = `Network error: ${err?.message || err}`
+  } finally {
+    clearBtn.disabled = false
+  }
+})
+
 boxplotBtn.addEventListener('click', async () => {
   const metric = metricSelect.value
   const group = groupSelect.value
@@ -73,6 +92,10 @@ corrBtn.addEventListener('click', async () => {
   const res = await fetch('/api/correlation')
   const data = await res.json()
   if (!res.ok) return
+  if (!data.labels || !data.labels.length) {
+    uploadStatus.textContent = 'No data. Upload a CSV first.'
+    return
+  }
   const z = data.matrix
   const x = data.labels
   const y = data.labels

@@ -189,6 +189,15 @@ def create_app():
         matrix = corr.values.tolist()
         return jsonify({'labels': labels, 'matrix': matrix})
 
+    @app.route('/api/reset', methods=['POST'])
+    def reset():
+        s = SessionLocal()
+        s.query(Employee).delete()
+        s.commit()
+        count = s.query(Employee).count()
+        s.close()
+        return jsonify({'status': 'ok', 'total_records': count})
+
     return app
 
 app = create_app()
