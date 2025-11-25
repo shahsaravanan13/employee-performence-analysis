@@ -6,6 +6,9 @@ const groupSelect = document.getElementById('groupSelect')
 const boxplotBtn = document.getElementById('boxplotBtn')
 const corrBtn = document.getElementById('corrBtn')
 const clearBtn = document.getElementById('clearBtn')
+const summaryDiv = document.getElementById('summary')
+const previewDiv = document.getElementById('preview')
+const groupCap = document.getElementById('groupCap')
 
 async function loadMeta() {
   const res = await fetch('/api/meta')
@@ -24,6 +27,25 @@ async function loadMeta() {
     o.textContent = c
     groupSelect.appendChild(o)
   }
+  if (typeof data.row_count === 'number') {
+    summaryDiv.innerHTML = `Rows: ${data.row_count}, Numeric columns: ${data.numeric_columns.length}, Group columns: ${data.group_columns.length}`
+  }
+}
+
+async function loadPreview() {
+  const res = await fetch('/api/preview')
+  const data = await res.json()
+  if (!data.columns || data.columns.length === 0) {
+    previewDiv.innerHTML = ''
+    return
+  }
+  const headers = data.columns
+  const rows = data.rows
+  let html = '<div style="overflow:auto"><table style="border-collapse:collapse;width:100%">'
+  html += '<thead><tr>' + headers.map(h=>`<th style="text-align:left;border-bottom:1px solid #ddd;padding:4px">${h}</th>`).join('') + '</tr></thead>'
+  html += '<tbody>' + rows.map(r=>'<tr>' + headers.map(h=>`<td style="border-bottom:1px solid #eee;padding:4px">${r[h] ?? ''}</td>`).join('') + '</tr>').join('') + '</tbody>'
+  html += '</table></div>'
+  previewDiv.innerHTML = html
 }
 
 uploadBtn.addEventListener('click', async () => {
@@ -42,6 +64,7 @@ uploadBtn.addEventListener('click', async () => {
     if (res.ok) {
       uploadStatus.textContent = `Uploaded. Total records: ${data?.total_records ?? 'n/a'}`
       await loadMeta()
+      await loadPreview()
     } else {
       uploadStatus.textContent = `Error: ${data?.error || res.statusText || 'upload failed'}`
     }
@@ -61,6 +84,7 @@ clearBtn.addEventListener('click', async () => {
     if (res.ok) {
       uploadStatus.textContent = `Cleared. Total records: ${data.total_records}`
       await loadMeta()
+      previewDiv.innerHTML = ''
     } else {
       uploadStatus.textContent = `Error: ${data.error || 'reset failed'}`
     }
@@ -74,7 +98,8 @@ clearBtn.addEventListener('click', async () => {
 boxplotBtn.addEventListener('click', async () => {
   const metric = metricSelect.value
   const group = groupSelect.value
-  const res = await fetch(`/api/boxplot?metric=${encodeURIComponent(metric)}&group_by=${encodeURIComponent(group)}`)
+  const cap = Math.max(1, Math.min(50, parseInt(groupCap.value || '12')))
+  const res = await fetch(`/api/boxplot?metric=${encodeURIComponent(metric)}&group_by=${encodeURIComponent(group)}&max_groups=${cap}`)
   const data = await res.json()
   if (!res.ok) return
   const traces = []
@@ -88,6 +113,15 @@ boxplotBtn.addEventListener('click', async () => {
   const layout = { title: `${metric} by ${group}`, boxmode: 'group' }
   const config = { responsive: true, displayModeBar: true }
   Plotly.newPlot('boxplot', traces, layout, config)
+  try {
+    const all = data.values.flat().map(v=>Number(v)).filter(v=>!Number.isNaN(v))
+    if (all.length) {
+      const min = Math.min(...all)
+      const max = Math.max(...all)
+      const mean = all.reduce((a,b)=>a+b,0)/all.length
+      uploadStatus.textContent = `Boxplot generated. Min: ${min.toFixed(2)}, Mean: ${mean.toFixed(2)}, Max: ${max.toFixed(2)}`
+    }
+  } catch {}
 })
 
 corrBtn.addEventListener('click', async () => {

@@ -65,10 +65,10 @@ def create_app():
                     continue
                 if vc.nunique() <= max(3, min(30, len(vc) // 2)):
                     cat_cols.append(c)
-            return jsonify({'numeric_columns': num_cols, 'group_columns': cat_cols})
+            return jsonify({'numeric_columns': num_cols, 'group_columns': cat_cols, 'row_count': int(len(df))})
         numeric_columns = ['performance_score', 'projects_completed', 'sales', 'customer_satisfaction']
         group_columns = ['department', 'role', 'location']
-        return jsonify({'numeric_columns': numeric_columns, 'group_columns': group_columns})
+        return jsonify({'numeric_columns': numeric_columns, 'group_columns': group_columns, 'row_count': None})
 
     @app.route('/api/employees', methods=['GET'])
     def list_employees():
@@ -160,10 +160,24 @@ def create_app():
         s.close()
         return jsonify({'status': 'ok', 'total_records': count, 'uploaded_rows': len(state['df'])})
 
+    @app.route('/api/preview', methods=['GET'])
+    def preview():
+        if state['df'] is None or state['df'].empty:
+            return jsonify({'columns': [], 'rows': []})
+        df = state['df']
+        head = df.head(20)
+        cols = list(head.columns)
+        rows = [ { c: (None if (isinstance(v, float) and pd.isna(v)) else (str(v) if not isinstance(v, (int, float)) else v)) for c, v in row.items() } for row in head.to_dict(orient='records') ]
+        return jsonify({'columns': cols, 'rows': rows})
+
     @app.route('/api/boxplot', methods=['GET'])
     def boxplot():
         metric = request.args.get('metric', 'performance_score')
         group_by = request.args.get('group_by', 'department')
+        try:
+            max_groups = int(request.args.get('max_groups', '12'))
+        except Exception:
+            max_groups = 12
         if state['df'] is not None and not state['df'].empty:
             data = state['df'].copy()
             if metric not in data.columns or group_by not in data.columns:
@@ -189,6 +203,9 @@ def create_app():
             if metric not in data.columns or group_by not in data.columns:
                 return jsonify({'error': 'invalid metric or group_by'}), 400
             data = data.dropna(subset=[metric, group_by])
+        counts = data[group_by].astype(str).value_counts()
+        keep = list(counts.head(max_groups).index)
+        data = data[data[group_by].astype(str).isin(keep)]
         groups = []
         values = []
         for g, d in data.groupby(group_by):

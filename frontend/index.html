@@ -18,12 +18,19 @@
       <div id="uploadStatus"></div>
     </div>
     <div class="panel">
+      <h2>Dataset Summary</h2>
+      <div id="summary"></div>
+      <div id="preview"></div>
+    </div>
+    <div class="panel">
       <h2>Boxplot</h2>
       <div class="controls">
         <label>Metric</label>
         <select id="metricSelect"></select>
         <label>Group By</label>
         <select id="groupSelect"></select>
+        <label>Max Groups</label>
+        <input type="number" id="groupCap" value="12" min="1" max="50" style="width:80px">
         <button id="boxplotBtn">Generate</button>
       </div>
       <div id="boxplot"></div>
