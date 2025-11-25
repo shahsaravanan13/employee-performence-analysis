@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employee Performance Analysis</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Employee Performance Analysis</h1>
+    <div class="panel">
+      <h2>Upload CSV</h2>
+      <input type="file" id="fileInput" accept=".csv">
+      <button id="uploadBtn">Upload</button>
+      <div id="uploadStatus"></div>
+    </div>
+    <div class="panel">
+      <h2>Boxplot</h2>
+      <div class="controls">
+        <label>Metric</label>
+        <select id="metricSelect"></select>
+        <label>Group By</label>
+        <select id="groupSelect"></select>
+        <button id="boxplotBtn">Generate</button>
+      </div>
+      <div id="boxplot"></div>
+    </div>
+    <div class="panel">
+      <h2>Correlation</h2>
+      <button id="corrBtn">Compute Correlation</button>
+      <div id="corr"></div>
+    </div>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
