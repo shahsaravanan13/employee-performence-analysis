@@ -1,0 +1,20 @@
+[build]
+  publish = "frontend"
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/"
+  to = "/landing.html"
+  status = 200
+
+[[redirects]]
+  from = "/view-project"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200
