@@ -11,8 +11,13 @@ const previewDiv = document.getElementById('preview')
 const groupCap = document.getElementById('groupCap')
 
 async function loadMeta() {
-  const res = await fetch('/api/meta')
-  const data = await res.json()
+  let data = { numeric_columns: [], group_columns: [], row_count: null }
+  try {
+    const res = await fetch('/api/meta')
+    data = await res.json()
+  } catch (e) {
+    uploadStatus.textContent = 'Backend not connected. Configure BACKEND_URL on Netlify.'
+  }
   metricSelect.innerHTML = ''
   groupSelect.innerHTML = ''
   for (const c of data.numeric_columns) {
@@ -30,6 +35,8 @@ async function loadMeta() {
   if (typeof data.row_count === 'number') {
     summaryDiv.innerHTML = `Rows: ${data.row_count}, Numeric columns: ${data.numeric_columns.length}, Group columns: ${data.group_columns.length}`
   }
+  boxplotBtn.disabled = !(metricSelect.options.length && groupSelect.options.length)
+  corrBtn.disabled = !metricSelect.options.length
 }
 
 async function loadPreview() {
